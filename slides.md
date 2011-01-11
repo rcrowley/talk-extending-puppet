@@ -582,17 +582,19 @@
 
 # How did we get here?
 
-	lib/puppet/indirector/node/plain.rb:15:in `find'
-	lib/puppet/indirector/indirection.rb:193:in `find'
-	lib/puppet/indirector/catalog/compiler.rb:91:in `find_node'
-	lib/puppet/indirector/catalog/compiler.rb:119:in `node_from_request'
-	lib/puppet/indirector/catalog/compiler.rb:33:in `find'
-	lib/puppet/indirector/indirection.rb:193:in `find'
-	lib/puppet/network/http/handler.rb:106:in `do_find'
-	lib/puppet/network/http/handler.rb:68:in `send'
-	lib/puppet/network/http/handler.rb:68:in `process'
-	lib/puppet/network/http/webrick/rest.rb:24:in `service'
-	# ...
+<pre>
+lib/puppet/indirector/node/plain.rb:15:in `find'
+lib/puppet/indirector/indirection.rb:193:in `find'
+lib/puppet/indirector/catalog/compiler.rb:91:in `find_node'
+lib/puppet/indirector/catalog/compiler.rb:119:in `node_from_request'
+lib/puppet/indirector/catalog/compiler.rb:33:in `find'
+lib/puppet/indirector/indirection.rb:193:in `find'
+lib/puppet/network/http/handler.rb:106:in `do_find'
+lib/puppet/network/http/handler.rb:68:in `send'
+lib/puppet/network/http/handler.rb:68:in `process'
+lib/puppet/network/http/webrick/rest.rb:24:in `service'
+# ...
+</pre>
 
 
 
@@ -602,6 +604,24 @@
 
 * Picks and caches the terminus class.
 * Dispatches calls to it.
+
+
+
+!SLIDE bullets smaller
+
+<pre>
+lib/puppet/indirector/node/plain.rb:15:in `find'
+lib/puppet/indirector/indirection.rb:193:in `find'
+lib/puppet/indirector/catalog/compiler.rb:91:in `find_node'
+lib/puppet/indirector/catalog/compiler.rb:119:in `node_from_request'
+<strong>lib/puppet/indirector/catalog/compiler.rb:33:in `find'</strong>
+lib/puppet/indirector/indirection.rb:193:in `find'
+lib/puppet/network/http/handler.rb:106:in `do_find'
+lib/puppet/network/http/handler.rb:68:in `send'
+lib/puppet/network/http/handler.rb:68:in `process'
+lib/puppet/network/http/webrick/rest.rb:24:in `service'
+# ...
+</pre>
 
 
 
@@ -771,17 +791,19 @@
 
 # How did we get here?
 
-	lib/puppet/indirector/node/exec.rb:17:in `find'
-	lib/puppet/indirector/indirection.rb:193:in `find'
-	lib/puppet/indirector/catalog/compiler.rb:91:in `find_node'
-	lib/puppet/indirector/catalog/compiler.rb:119:in `node_from_request'
-	lib/puppet/indirector/catalog/compiler.rb:33:in `find'
-	lib/puppet/indirector/indirection.rb:193:in `find'
-	lib/puppet/network/http/handler.rb:106:in `do_find'
-	lib/puppet/network/http/handler.rb:68:in `send'
-	lib/puppet/network/http/handler.rb:68:in `process'
-	lib/puppet/network/http/webrick/rest.rb:24:in `service'
-	# ...
+<pre>
+lib/puppet/indirector/node/exec.rb:17:in `find'
+lib/puppet/indirector/indirection.rb:193:in `find'
+lib/puppet/indirector/catalog/compiler.rb:91:in `find_node'
+lib/puppet/indirector/catalog/compiler.rb:119:in `node_from_request'
+lib/puppet/indirector/catalog/compiler.rb:33:in `find'
+lib/puppet/indirector/indirection.rb:193:in `find'
+lib/puppet/network/http/handler.rb:106:in `do_find'
+lib/puppet/network/http/handler.rb:68:in `send'
+lib/puppet/network/http/handler.rb:68:in `process'
+lib/puppet/network/http/webrick/rest.rb:24:in `service'
+# ...
+</pre>
 
 
 
@@ -792,6 +814,24 @@
 * As expected, everything&#8217;s the same except where the indirector looked for the node.
 
 * Where&#8217;s that `foo` parameter injected by the external node classifier?
+
+
+
+!SLIDE bullets smaller
+
+<pre>
+lib/puppet/indirector/node/exec.rb:17:in `find'
+lib/puppet/indirector/indirection.rb:193:in `find'
+<strong>lib/puppet/indirector/catalog/compiler.rb:91:in `find_node'</strong>
+lib/puppet/indirector/catalog/compiler.rb:119:in `node_from_request'
+lib/puppet/indirector/catalog/compiler.rb:33:in `find'
+lib/puppet/indirector/indirection.rb:193:in `find'
+lib/puppet/network/http/handler.rb:106:in `do_find'
+lib/puppet/network/http/handler.rb:68:in `send'
+lib/puppet/network/http/handler.rb:68:in `process'
+lib/puppet/network/http/webrick/rest.rb:24:in `service'
+# ...
+</pre>
 
 
 
