@@ -277,6 +277,14 @@
 
 
 
+!SLIDE bullets
+
+# `puppet-pip`
+
+* `package` provider for Python&#8217;s<br />`pip` package management tool.
+
+
+
 !SLIDE bullets small
 
 # Install `puppet-pip`
