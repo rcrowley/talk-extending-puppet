@@ -1144,9 +1144,25 @@
 
 !SLIDE bullets
 
-# Thank you
-
 * [github.com/rcrowley/puppet/tree/demo](https://github.com/rcrowley/puppet/tree/demo)
+
+
+
+!SLIDE bullets smaller
+
+# Further reading
+
+* [docs.puppetlabs.com/guides/custom_types.html](http://docs.puppetlabs.com/guides/custom_types.html)
+* [docs.puppetlabs.com/guides/provider_development.html](http://docs.puppetlabs.com/guides/provider_development.html)
+* [docs.puppetlabs.com/guides/complete_resource_example.html](http://docs.puppetlabs.com/guides/complete_resource_example.html)
+* [docs.puppetlabs.com/guides/custom_functions.html](http://docs.puppetlabs.com/guides/custom_functions.html)
+* [projects.puppetlabs.com/projects/puppet/wiki](http://projects.puppetlabs.com/projects/puppet/wiki)
+
+
+
+!SLIDE bullets
+
+# Thank you
 
 * <richard@devstructure.com> or [@rcrowley](http://twitter.com/rcrowley)
 * P.S. use DevStructure.
