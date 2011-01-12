@@ -313,7 +313,6 @@
 
 	  def connection
 	    return @connection if defined?(@connection)
-	    return @connection if defined?(@connection)
 	    @connection = Net::HTTP.new("github.com", 443)
 	    @connection.use_ssl = true
 	    @connection.verify_mode = OpenSSL::SSL::VERIFY_NONE
