@@ -2,6 +2,8 @@
 
 # Extending Puppet
 
+* [rcrowley.org/talks/puppet-camp-eu-2011/](http://rcrowley.org/talks/puppet-camp-eu-2011/)
+
 
 
 !SLIDE bullets
@@ -23,19 +25,49 @@
 
 
 
-!SLIDE bullets
+!SLIDE bullets small
 
-# How I&#8217;m running Puppet<br />in this demo
+# How I&#8217;m running Puppet
+
+	[main]
+		confdir = /home/rcrowley/work/extending-puppet
+		logdir = /var/log/puppet
+	    rundir = /var/run/puppet
+	    ssldir = $vardir/ssl
+	    vardir = /var/lib/puppet
+
+	    pluginsync = true
+
+
+
+!SLIDE bullets small
+
+# How I&#8217;m running Puppet
 
 	@@@ sh
 	# Master
-	sudo env RUBYLIB=$HOME/work/puppet/lib \
-		puppet master --no-daemonize --verbose
+	puppet master --confdir=$HOME/work/extending-puppet
 
 	# Agent
-	sudo env RUBYLIB=$HOME/work/puppet/lib \
-		puppet agent --no-daemonize --onetime \
-		--verbose
+	puppet agent --confdir=$HOME/work/extending-puppet
+
+
+
+!SLIDE bullets small
+
+# How I&#8217;m running Puppet
+
+* [github.com/rcrowley/extending-puppet](https://github.com/rcrowley/extending-puppet)
+
+
+
+!SLIDE bullets
+
+# Plugins in modules
+
+* Not just &#8220;plugins.&#8221;
+* Any Puppet source tree.
+* Monkey patches, too.
 
 
 
@@ -83,7 +115,7 @@
 
 # Properties
 
-* No guarantees on order.
+* No explicit, documented<br />guarantees on order.
 * Hard to work with in procedural code.
 
 
@@ -95,6 +127,15 @@
 * Use only one property per type.
 * Usually, this is the `ensure` property.
 
+
+
+!SLIDE bullets
+
+# `ensure` property
+
+* `exists?`
+* `create`
+* `destroy`
 
 
 !SLIDE bullets smaller
@@ -329,7 +370,7 @@
 
 !SLIDE bullets
 
-* [github.com/rcrowley/puppet/tree/demo](https://github.com/rcrowley/puppet/tree/demo)
+* [github.com/rcrowley/extending-puppet](https://github.com/rcrowley/extending-puppet)
 
 
 
@@ -344,24 +385,19 @@
 # `puppet-pip`
 
 * `package` provider for Python&#8217;s<br />`pip` package management tool.
+* Included in Puppet 2.7 release candiate.
 
 
 
-!SLIDE bullets small
+!SLIDE bullets
 
-# Install `puppet-pip`
+# Install `puppet-pip` on 2.6
 
 	@@@ sh
 	gem install puppet-pip
 
-	# Master
-	sudo env RUBYLIB=$GEMHOME/puppet-pip-0.0.1/lib \
-		puppet master --no-daemonize --verbose
-
-	# Agent
-	sudo env RUBYLIB=$GEMHOME/puppet-pip-0.0.1/lib \
-	puppet agent --no-daemonize --onetime \
-		--verbose
+	export \
+		RUBYLIB=$GEM_HOME/puppet-pip-1.0.0/lib
 
 
 
@@ -381,14 +417,9 @@
 	  has_feature :installable, :uninstallable,
 		:upgradeable, :versionable
 
-	  if pathname = `which pip`.chomp
-	    commands :pip => pathname
-	  else
-	    raise NotImplementedError
-	  end
-
 	  # TODO self.parse, self.instances,
-	  # TODO query, latest, install, uninstall, update
+	  # TODO query, latest, install, uninstall, update,
+	  # TODO lazy_pip
 
 	end
 
@@ -409,7 +440,8 @@
 
 	  def self.instances
 	    packages = []
-	    execpipe "#{command :pip} freeze" do |process|
+	    pip_cmd = which('pip') or return []
+	    execpipe "#{pip_cmd} freeze" do |process|
 	      process.collect do |line|
 	        next unless options = parse(line)
 	        packages << new(options)
@@ -426,13 +458,12 @@
 
 	@@@ Ruby
 	  def query
-	    execpipe "#{command :pip} freeze" do |process|
-	      process.each do |line|
-	        options = self.class.parse(line)
-	        return options if options[:name] == @resource[:name]
+	    self.class.instances.each do |provider_pip|
+	      if @resource[:name] == provider_pip.name
+	        return provider_pip.properties
 	      end
 	    end
-	    nil
+	    return nil
 	  end
 
 	  def latest
@@ -443,32 +474,73 @@
 	  end
 
 
-
 !SLIDE bullets smaller
 
 # `lib/puppet/provider/package/pip.rb`
 
 	@@@ Ruby
 	  def install
-	    case @resource[:ensure]
-	    when String
-	      pip "install", "-q",
-	        "#{@resource[:name]}==#{@resource[:ensure]}"
-	    when :latest
-	      pip "install", "-q", "--upgrade", @resource[:name]
+	    args = %w{install -q}
+	    if @resource[:source]
+	      args << "-e"
+	      if String === @resource[:ensure]
+	        args << "#{@resource[:source]}@#{@resource[:ensure]}" +
+	          "#egg=#{@resource[:name]}"
+	      else
+	        args << "#{@resource[:source]}#egg=#{@resource[:name]}"
+	      end
 	    else
-	      pip "install", "-q", @resource[:name]
+	      case @resource[:ensure]
+	      when String
+	        args << "#{@resource[:name]}==#{@resource[:ensure]}"
+	      when :latest
+	        args << "--upgrade" << @resource[:name]
+	      else
+	        args << @resource[:name]
+	      end
 	    end
+	    lazy_pip *args
 	  end
 
-	  # Uninstall won't work unless this issue gets fixed.
-	  # <http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=562544>
+
+
+!SLIDE bullets smaller
+
+# `lib/puppet/provider/package/pip.rb`
+
+	@@@ Ruby
 	  def uninstall
-	    pip "uninstall", "-y", "-q", @resource[:name]
+	    lazy_pip "uninstall", "-y", "-q", @resource[:name]
 	  end
 
+
+
+!SLIDE bullets smaller
+
+# `lib/puppet/provider/package/pip.rb`
+
+	@@@ Ruby
 	  def update
 	    install
+	  end
+
+
+
+!SLIDE bullets smaller
+
+# `lib/puppet/provider/package/pip.rb`
+
+	@@@ Ruby
+	  private
+	  def lazy_pip(*args)
+	    pip *args
+	  rescue NoMethodError => e
+	    if pathname = which('pip')
+	      self.class.commands :pip => pathname
+	      pip *args
+	    else
+	      raise e
+	    end
 	  end
 
 
@@ -479,7 +551,7 @@
 
 	@@@ Puppet
 	package { "django":
-		ensure   => "1.2.4",
+		ensure   => "1.3",
 		provider => pip,
 	}
 
@@ -488,6 +560,7 @@
 !SLIDE bullets
 
 * [github.com/rcrowley/puppet-pip](https://github.com/rcrowley/puppet-pip)
+* [github.com/puppetlabs/puppet/tree/next](https://github.com/puppetlabs/puppet/tree/next)
 
 
 
@@ -495,25 +568,83 @@
 
 ## Part 2
 
-# WTF is an indirector?
+# Custom functions
 
-## (It&#8217;s not even in the dictionary.)
+## (Because the Puppet master<br />needs more things to do.)
 
 
 
 !SLIDE bullets
 
-# How I&#8217;m running Puppet<br />in this demo
+# GitHub authorized keys
 
-	@@@ sh
-	# Master
-	sudo env RUBYLIB=$HOME/work/puppet/lib \
-		puppet master --no-daemonize --verbose
+## Redux
 
-	# Agent
-	sudo env RUBYLIB=$HOME/work/puppet/lib \
-		puppet agent --no-daemonize --onetime \
-		--verbose
+* Don&#8217;t share GitHub API token with agents.
+
+
+
+!SLIDE bullets
+
+# Example resource
+
+	@@@ Puppet
+	file { "/root/.ssh/github":
+		content => github(
+			"rcrowley",
+			"0123456789abcdef0123456789abcdef"
+		),
+		ensure => file,
+		group => "root",
+		mode => 0600,
+		owner => "root",
+	}
+
+
+
+!SLIDE bullets smaller
+
+# `lib/puppet/parser/ functions/github.rb`
+
+	@@@ Ruby
+	require 'base64'
+	require 'net/https'
+	require 'sshkey'
+
+	Puppet::Parser::Functions.newfunction :github,
+	  :type => :rvalue do |args|
+
+	  # TODO Check GitHub for an existing public key.
+
+	  key = SSHKey.generate
+	  request = Net::HTTP::Post.new("/api/v2/json/user/key/add")
+	  request["Authorization"] = "Basic #{Base64.encode64(
+	    "#{args[1]}/token:#{args[2]}").gsub("\n", "")}"
+	  request.set_form_data(
+	    :title => args[0], :key => key.ssh_public_key)
+
+	  connection = Net::HTTP.new("github.com", 443)
+	  connection.use_ssl = true
+	  connection.request(request)
+
+	  key.rsa_private_key
+	end
+
+
+
+!SLIDE bullets
+
+* [github.com/rcrowley/extending-puppet](https://github.com/rcrowley/extending-puppet)
+
+
+
+!SLIDE bullets
+
+## Part 3
+
+# WTF is an indirector?
+
+## (It&#8217;s not even in the dictionary.)
 
 
 
@@ -529,7 +660,7 @@
 
 !SLIDE bullets small
 
-# `lib/puppet/indirector/ node/plain.rb`
+# From `lib/puppet/ indirector/node/plain.rb`
 
 	@@@ Ruby
 	require 'puppet/node'
@@ -550,7 +681,7 @@
 
 !SLIDE bullets smaller
 
-# `lib/puppet/indirector/plain.rb`
+# From `lib/puppet/indirector/plain.rb`
 
 	@@@ Ruby
 	require 'puppet/indirector/terminus'
@@ -668,7 +799,7 @@ lib/puppet/network/http/webrick/rest.rb:24:in `service'
 
 !SLIDE bullets smaller
 
-# From `lib/puppet/indirector/ catalog/compiler.rb`
+# From `lib/puppet/parser/compiler.rb`
 
 	@@@ Ruby
 	  def compile
@@ -697,8 +828,8 @@ lib/puppet/network/http/webrick/rest.rb:24:in `service'
 
 # Catalog compilation
 
-* `set_node_parameters` and `evaluate_node_classes` handle `@parameters` and `@classes` set by the node terminus.
-* `evaluate_ast_node` handles `node` definitions from Puppet code.
+* `set_node_parameters` and `evaluate_node_classes` handle<br />`@parameters` and `@classes`<br />set by the node terminus.
+* `evaluate_ast_node` handles<br />`node` definitions from Puppet code.
 
 
 
@@ -706,7 +837,7 @@ lib/puppet/network/http/webrick/rest.rb:24:in `service'
 
 # `@parameters` and `@classes`
 
-* Sound suspiciously like the makings of the external node classifier.
+* Sound suspiciously like the makings<br />of the external node classifier.
 
 
 
@@ -714,9 +845,8 @@ lib/puppet/network/http/webrick/rest.rb:24:in `service'
 
 # Setup external node classifier in `puppet.conf`
 
-	[master]
-		external_nodes=/usr/local/bin/classifier
-		node_terminus=exec
+	external_nodes = /usr/local/bin/classifier
+	node_terminus = exec
 
 
 
@@ -728,7 +858,7 @@ lib/puppet/network/http/webrick/rest.rb:24:in `service'
 	#!/bin/sh
 	cat <<EOF
 	---
-	classes: {}
+	classes: []
 	parameters:
 	  foo: bar
 	EOF
@@ -887,27 +1017,29 @@ lib/puppet/network/http/webrick/rest.rb:24:in `service'
 
 # What&#8217;s in a `node`?
 
-	#<Puppet::Node:0xb70fa674 @name="devstructure.hsd1.ca.comcast.net.",
-	@classes={}, @expiration=Sat Jan 08 22:47:33 +0000 2011,
-	@parameters={"network_eth1"=>"33.33.33.0", "netmask"=>"255.255.255.0",
-	"kernel"=>"Linux", "processorcount"=>"1", "swapfree"=>"998.67 MB",
-	"physicalprocessorcount"=>"0", "uniqueid"=>"007f0101",
-	"lsbmajdistrelease"=>"10", "fqdn"=>"devstructure.hsd1.ca.comcast.net.",
-	"operatingsystemrelease"=>"10.10", "virtual"=>"physical",
-	"ipaddress"=>"10.0.2.15", "memorysize"=>"346.15 MB",
-	"is_virtual"=>"false", :_timestamp=>Sat Jan 08 22:17:32 +0000 2011,
-	"clientversion"=>"2.6.4", "hardwaremodel"=>"i686",
-	"kernelrelease"=>"2.6.35-22-generic-pae",
-	"rubysitedir"=>"/usr/local/lib/site_ruby/1.8", "ps"=>"ps -ef",
-	"macaddress_eth0"=>"08:00:27:8e:9e:65", "domain"=>"hsd1.ca.comcast.net.",
-	"netmask_eth0"=>"255.255.255.0", "serverip"=>"10.0.2.15",
-	"servername"=>"devstructure.hsd1.ca.comcast.net.", "timezone"=>"UTC",
-	"uptime_days"=>"9", "macaddress_eth1"=>"08:00:27:c3:78:5a", "id"=>"root",
-	"netmask_eth1"=>"255.255.255.0", "processor0"=>"Intel(R) Core(TM)2 Duo CPU
-	T8300  @ 2.40GHz", "hardwareisa"=>"unknown", "lsbdistrelease"=>"10.10",
-	"selinux"=>"false", "manufacturer"=>"innotek GmbH", "interfaces"=>"eth0,eth1",
-	"memoryfree"=>"225.10 MB", "uptime_hours"=>"216", "foo"=>"bar",
-	"lsbdistdescription"=>"Ubuntu 10.10", "lsbdistcodename"=>"maverick", "kernelversion"=>"2.6.35", "path"=>"/home/vagrant/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/var/lib/gems/1.8/bin", "hostname"=>"devstructure", "uptime"=>"9 days", "puppetversion"=>"2.6.4", "environment"=>"production", "serialnumber"=>"0", "macaddress"=>"08:00:27:8e:9e:65", "facterversion"=>"1.5.8", "ipaddress_eth0"=>"10.0.2.15", "kernelmajversion"=>"2.6", "swapsize"=>"1011.00 MB", "sshrsakey"=>"AAAAB3NzaC1yc2EAAAADAQABAAABAQDrJ0U+iSED6LNmnC0bHfpLKaDvWh0UXgQzdElhtY1xOS065TRMJIrb6LPaAxJH3iWXLP57rM8Vldurx+pOJWVz6ZmsGSz/EOugg6rC6K2cPAS8V5nRq6SUKksb/eBR0LbM0ygMoVEKi0ogBIkQuZNeVqdUtIcT5P7DBrasPkxzkBqxqAgYxzMeR82vYSLBEwhpeyrVUzpOHLh9mVxfCQoZRdEpnckGmMxYSOW7OBzf46CBhPrXAB5ZX3aZB+iDxNhMVvMYZFircDb/ZKZ4ph6qHFVWvBtd54N9yXf+XSLZPfox4zIRR8BRoUz8rx7ccZDZ6SWVdMCZ6jO3MuxEIeFJ", "operatingsystem"=>"Ubuntu", "serverversion"=>"2.6.4", "network_eth0"=>"10.0.2.0", "lsbdistid"=>"Ubuntu", "architecture"=>"i386", "uptime_seconds"=>"779012", "sshdsakey"=>"AAAAB3NzaC1kc3MAAACBAJNDwltq7JCbq7ql1a3g2IxLWwhJNLxk0jYj/oLLc7LvpiN1kcfuNoK2bZooUCnGkcyZs+6U3jbz2idISOncq+hfFjrMv0qIGKHXWANh1qLZuhRjBHwRlkD6ll5gw4ioTohmt3VfUbE4hJfK0z3wtQn/SLLoz4MSNnR09OIZOCgzAAAAFQDLW+bfrDl+WdsE4ixDCRr4vEW1lwAAAIBt+Bz62PhQLZSWpLaHCOOaFeoHwv9IPvQ/ors0zDOxDEoK5GHOY3BcCO8s4rHr17aQKmMP5ztNwzUBl+OlkSlQ7kAEMBRvehFbhK+SOcjvqIt6i2i9/3nn9ba0AZ8bQ+1T8Z+A/6lRmWtaeUqsZNRJitfzez7eWRfvd+X/GK1eaAAAAIAqyACyAElrdGd4YfwV/YPGjiUpIjvzqiBCogO2qvMj6/ohzdN7wBmIdIUmYQ1uYsQ6avd3GL5S2I/xJ1uGosIh6xlKa0Dk4SqOq1LGebdCpv1aUKIwecQlkxrQE6Da9Q4zVgHrtlglOW7A8uq8gfl/VQdwU1sow36scLSE8PCn/g==", "rubyversion"=>"1.8.7", "ipaddress_eth1"=>"33.33.33.33", "productname"=>"VirtualBox", "clientcert"=>"devstructure.hsd1.ca.comcast.net."}, @time=Sat Jan 08 22:17:33 +0000 2011, @environment="production">
+<pre>
+#&lt;Puppet::Node:0xb70fa674 @name="devstructure.hsd1.ca.comcast.net.",
+@classes={}, @expiration=Sat Jan 08 22:47:33 +0000 2011,
+@parameters={"network_eth1"=&gt;"33.33.33.0", "netmask"=&gt;"255.255.255.0",
+"kernel"=&gt;"Linux", "processorcount"=&gt;"1", "swapfree"=&gt;"998.67 MB",
+"physicalprocessorcount"=&gt;"0", "uniqueid"=&gt;"007f0101",
+"lsbmajdistrelease"=&gt;"10", "fqdn"=&gt;"devstructure.hsd1.ca.comcast.net.",
+"operatingsystemrelease"=&gt;"10.10", "virtual"=&gt;"physical",
+"ipaddress"=&gt;"10.0.2.15", "memorysize"=&gt;"346.15 MB",
+"is_virtual"=&gt;"false", :_timestamp=&gt;Sat Jan 08 22:17:32 +0000 2011,
+"clientversion"=&gt;"2.6.4", "hardwaremodel"=&gt;"i686",
+"kernelrelease"=&gt;"2.6.35-22-generic-pae",
+"rubysitedir"=&gt;"/usr/local/lib/site_ruby/1.8", "ps"=&gt;"ps -ef",
+"macaddress_eth0"=&gt;"08:00:27:8e:9e:65", "domain"=&gt;"hsd1.ca.comcast.net.",
+"netmask_eth0"=&gt;"255.255.255.0", "serverip"=&gt;"10.0.2.15",
+"servername"=&gt;"devstructure.hsd1.ca.comcast.net.", "timezone"=&gt;"UTC",
+"uptime_days"=&gt;"9", "macaddress_eth1"=&gt;"08:00:27:c3:78:5a", "id"=&gt;"root",
+"netmask_eth1"=&gt;"255.255.255.0", "processor0"=&gt;"Intel(R) Core(TM)2 Duo CPU
+T8300  @ 2.40GHz", "hardwareisa"=&gt;"unknown", "lsbdistrelease"=&gt;"10.10",
+"selinux"=&gt;"false", "manufacturer"=&gt;"innotek GmbH", "interfaces"=&gt;"eth0,eth1",
+"memoryfree"=&gt;"225.10 MB", "uptime_hours"=&gt;"216", <strong>"foo"=&gt;"bar"</strong>,
+"lsbdistdescription"=&gt;"Ubuntu 10.10", "lsbdistcodename"=&gt;"maverick", "kernelversion"=&gt;"2.6.35", "path"=&gt;"/home/vagrant/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/var/lib/gems/1.8/bin", "hostname"=&gt;"devstructure", "uptime"=&gt;"9 days", "puppetversion"=&gt;"2.6.4", "environment"=&gt;"production", "serialnumber"=&gt;"0", "macaddress"=&gt;"08:00:27:8e:9e:65", "facterversion"=&gt;"1.5.8", "ipaddress_eth0"=&gt;"10.0.2.15", "kernelmajversion"=&gt;"2.6", "swapsize"=&gt;"1011.00 MB", "sshrsakey"=&gt;"AAAAB3NzaC1yc2EAAAADAQABAAABAQDrJ0U+iSED6LNmnC0bHfpLKaDvWh0UXgQzdElhtY1xOS065TRMJIrb6LPaAxJH3iWXLP57rM8Vldurx+pOJWVz6ZmsGSz/EOugg6rC6K2cPAS8V5nRq6SUKksb/eBR0LbM0ygMoVEKi0ogBIkQuZNeVqdUtIcT5P7DBrasPkxzkBqxqAgYxzMeR82vYSLBEwhpeyrVUzpOHLh9mVxfCQoZRdEpnckGmMxYSOW7OBzf46CBhPrXAB5ZX3aZB+iDxNhMVvMYZFircDb/ZKZ4ph6qHFVWvBtd54N9yXf+XSLZPfox4zIRR8BRoUz8rx7ccZDZ6SWVdMCZ6jO3MuxEIeFJ", "operatingsystem"=&gt;"Ubuntu", "serverversion"=&gt;"2.6.4", "network_eth0"=&gt;"10.0.2.0", "lsbdistid"=&gt;"Ubuntu", "architecture"=&gt;"i386", "uptime_seconds"=&gt;"779012", "sshdsakey"=&gt;"AAAAB3NzaC1kc3MAAACBAJNDwltq7JCbq7ql1a3g2IxLWwhJNLxk0jYj/oLLc7LvpiN1kcfuNoK2bZooUCnGkcyZs+6U3jbz2idISOncq+hfFjrMv0qIGKHXWANh1qLZuhRjBHwRlkD6ll5gw4ioTohmt3VfUbE4hJfK0z3wtQn/SLLoz4MSNnR09OIZOCgzAAAAFQDLW+bfrDl+WdsE4ixDCRr4vEW1lwAAAIBt+Bz62PhQLZSWpLaHCOOaFeoHwv9IPvQ/ors0zDOxDEoK5GHOY3BcCO8s4rHr17aQKmMP5ztNwzUBl+OlkSlQ7kAEMBRvehFbhK+SOcjvqIt6i2i9/3nn9ba0AZ8bQ+1T8Z+A/6lRmWtaeUqsZNRJitfzez7eWRfvd+X/GK1eaAAAAIAqyACyAElrdGd4YfwV/YPGjiUpIjvzqiBCogO2qvMj6/ohzdN7wBmIdIUmYQ1uYsQ6avd3GL5S2I/xJ1uGosIh6xlKa0Dk4SqOq1LGebdCpv1aUKIwecQlkxrQE6Da9Q4zVgHrtlglOW7A8uq8gfl/VQdwU1sow36scLSE8PCn/g==", "rubyversion"=&gt;"1.8.7", "ipaddress_eth1"=&gt;"33.33.33.33", "productname"=&gt;"VirtualBox", "clientcert"=&gt;"devstructure.hsd1.ca.comcast.net."}, @time=Sat Jan 08 22:17:33 +0000 2011, @environment="production"&gt;
+</pre>
 
 * `foo` is indeed `bar` but where&#8217;d the rest of the facts come from?
 
@@ -960,10 +1092,12 @@ lib/puppet/network/http/webrick/rest.rb:24:in `service'
 
 # What&#8217;s in a `node`?
 
-	#<Puppet::Node:0xb71eb704
-	@name="devstructure.hsd1.ca.comcast.net.",
-	@classes={}, @parameters={"foo"=>"bar"},
-	@time=Sat Jan 08 22:23:12 +0000 2011>
+<pre>
+#&lt;Puppet::Node:0xb71eb704
+@name="devstructure.hsd1.ca.comcast.net.",
+@classes={}, @parameters={<strong>"foo"=&gt;"bar"</strong>},
+@time=Sat Jan 08 22:23:12 +0000 2011&gt;
+</pre>
 
 
 
@@ -1254,7 +1388,7 @@ lib/puppet/network/http/webrick/rest.rb:24:in `service'
 
 !SLIDE bullets
 
-* [github.com/rcrowley/puppet/tree/demo](https://github.com/rcrowley/puppet/tree/demo)
+* [github.com/rcrowley/extending-puppet](https://github.com/rcrowley/extending-puppet)
 
 
 
@@ -1267,6 +1401,44 @@ lib/puppet/network/http/webrick/rest.rb:24:in `service'
 * [docs.puppetlabs.com/guides/complete_resource_example.html](http://docs.puppetlabs.com/guides/complete_resource_example.html)
 * [docs.puppetlabs.com/guides/custom_functions.html](http://docs.puppetlabs.com/guides/custom_functions.html)
 * [projects.puppetlabs.com/projects/puppet/wiki](http://projects.puppetlabs.com/projects/puppet/wiki)
+
+
+
+!SLIDE bullets
+
+# One more thing:<br />Puppet faces
+
+* New in 2.7.
+* Formerly a module called `puppet-interfaces`.
+
+
+
+!SLIDE bullets smaller
+
+# Puppet faces
+
+	@@@ Ruby
+	require 'puppet/face'
+
+	Puppet::Face.define(:configurer, '0.0.1') do
+	  action(:synchronize) do
+	    when_invoked do |certname, options|
+	      facts = Puppet::Face[:facts, '0.0.1'].find(certname)
+	      catalog = Puppet::Face[:catalog, '0.0.1'].
+	        download(certname, facts)
+	      report = Puppet::Face[:catalog, '0.0.1'].apply(catalog)
+	      report
+	    end
+	  end
+	end
+
+
+
+!SLIDE bullets small
+
+# Puppet faces
+
+* [github.com/puppetlabs/puppet/tree/next/lib/puppet/face](https://github.com/puppetlabs/puppet/tree/next/lib/puppet/face)
 
 
 

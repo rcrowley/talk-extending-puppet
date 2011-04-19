@@ -1,4 +1,4 @@
-set :remote, "/var/www/sv-puppet-2011-01-11"
+set :remote, "/var/www/puppet-camp-eu-2011"
 
 role :www, "root@rcrowley.org"
 
