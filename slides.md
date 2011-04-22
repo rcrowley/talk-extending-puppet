@@ -591,6 +591,7 @@
 	@@@ Puppet
 	file { "/root/.ssh/github":
 		content => github(
+			"my sweet public key",
 			"rcrowley",
 			"0123456789abcdef0123456789abcdef"
 		),
